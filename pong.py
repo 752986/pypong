@@ -8,9 +8,10 @@ import random
 
 pygame.init()
 
-FPS = 60
+FPS = 240
 SCREEN_WIDTH = 1440
 SCREEN_HEIGHT = 960
+MAX_POINTS = 11
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Pong!")
 
@@ -30,7 +31,7 @@ class GameObject:
     def update(self, delta: float):
         pass
 
-    def draw(self):
+    def draw(self, delta: float):
         pass
 
 
@@ -41,6 +42,7 @@ class Ball(GameObject):
     _can_bounce = True
     _paddle_bounce = True
     _hue: float
+    _sleep: float = 0.0
 
     def __init__(self, pos: Vector2, vel: Vector2 = Vector2(0, 0), color: Color = Color(255, 255, 255), size: float = 15):
         super().__init__(pos, color)
@@ -48,14 +50,34 @@ class Ball(GameObject):
         self.vel = vel
         self.bounds = Rect(pos, (size, size))
 
+    def _reset(self, dir: int):
+        self.pos = Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+
+        xval = abs(self.vel.x)
+        self.vel.y = random.randint(int(-xval), int(xval))
+        self.vel.x = xval * (-1 if dir == Paddle.LEFT else 1) * 1.05
+
+        self._sleep = 1.5
+
     def update(self, delta: float):
+        if self._sleep > 0.0:
+            self._sleep -= delta
+            pygame.draw.line(screen, self.color, self.pos, self.pos + (self.vel))
+            return
+
         # bounce off of wall:
         if self._can_bounce: # only bounce once, otherwise it could get stuck in the wall
-            if self.bounds.left < 0 or self.bounds.right > SCREEN_WIDTH:
-                self.vel.x *= -1
-                self._can_bounce = False
+            # if self.bounds.left < 0 or self.bounds.right > SCREEN_WIDTH:
+            #     self.vel.x *= -1
+            #     self._can_bounce = False
+            if self.bounds.left < 0:
+                score(2)
+                self._reset(Paddle.RIGHT)
+            if self.bounds.right > SCREEN_WIDTH:
+                score(1)
+                self._reset(Paddle.LEFT)
             if self.bounds.top < 0 or self.bounds.bottom > SCREEN_HEIGHT:
-                self.vel.y *= -0.95 # slowly decay vertical motion, so it doesn't get out of hand
+                self.vel.y *= -0.6 # slowly decay vertical motion, so it doesn't get out of hand
                 self._can_bounce = False
 
         # bounce off of paddles:
@@ -74,7 +96,11 @@ class Ball(GameObject):
         if screen.get_clip().contains(self.bounds):
             self._can_bounce = True
 
-    def draw(self):
+    def draw(self, delta: float):
+        if self._sleep > 0.0:
+            normvel = self.vel.normalize()
+            pygame.draw.line(screen, self.color, Vector2(self.bounds.center) + (normvel * 10), Vector2(self.bounds.center) + (normvel * 20), 3)
+
         self._hue = (self._hue + 0.1) % 360
         self.color.hsla = (self._hue, self.color.hsla[1], self.color.hsla[2], self.color.hsla[3])
         pygame.draw.circle(screen, self.color, self.bounds.center, self.bounds.width / 2) 
@@ -94,10 +120,10 @@ class Paddle(GameObject):
         super().__init__(pos, color)
         self.base_color = color
         self.facing = Paddle.RIGHT if pos.x < SCREEN_WIDTH / 2 else Paddle.LEFT
-        self.bounds = Rect(pos, (6, size))
+        self.bounds = Rect(pos, (16, size))
         self._py = pos.y
 
-    def move(self, amnt: float, delta: float = 1):
+    def move(self, amnt: float, delta):
         self.pos.y += amnt * delta
 
     def update(self, delta: float):
@@ -109,10 +135,51 @@ class Paddle(GameObject):
         self.dy = lerp((self.pos.y - self._py) / delta, self.dy, 0.9)
         self._py = self.pos.y
 
-    def draw(self):
+    def draw(self, delta: float):
         offset = round(self.dy * 0.005, 1) * (1 if self.facing == Paddle.LEFT else -1)
         pygame.draw.line(screen, self.color, (self.bounds.centerx - offset, self.bounds.top), (self.bounds.centerx + offset, self.bounds.bottom), 6)
         
+
+class Score(GameObject):
+    score: int = 0
+
+    _time: float = 0.0
+
+    def __init__(self, pos: Vector2, color: Color):
+        super().__init__(pos, color)
+
+    def update(self, delta: float):
+        pass
+
+    def draw(self, delta: float):
+        self._time += delta * 0.3
+
+        string = str(self.score)
+        if len(string) == 1:
+            string = "0" + string
+
+        text = game_font.render(string, True, Color(255, 255, 255))
+        screen.blit(text, self.pos + Vector2(-26, -22))
+
+        d1 = 40
+        d2 = d1 + 10
+
+        for i in range(self.score):
+            angle = (i / self.score) * math.tau + self._time
+            p1 = Vector2(math.cos(angle) * d1, math.sin(angle) * d1)
+            p2 = Vector2(math.cos(angle) * d2, math.sin(angle) * d2)
+            pygame.draw.line(screen, self.color, p1 + self.pos, p2 + self.pos, 2)
+
+
+
+def score(player: int):
+    global score_p1
+    global score_p2
+    if player == 1:
+        score_p1 += 1
+    if player == 2:
+        score_p2 += 1
+
 
 # initialize game:
 PLAYER_SPEED = 1200.0
@@ -125,11 +192,18 @@ pygame.mouse.set_visible(False)
 
 p1 = Paddle(Vector2(50, SCREEN_HEIGHT / 2), Color(176, 255, 54))
 p2 = Paddle(Vector2(SCREEN_WIDTH - 50, SCREEN_HEIGHT / 2), Color(255, 58, 100))
+s1 = Score(Vector2(400, 100), Color(176, 255, 54))
+s2 = Score(Vector2(SCREEN_WIDTH - 400, 100), Color(255, 58, 100))
 gameobjects: list[GameObject] = [
+    s1,
+    s2,
     p1,
     p2,
-    Ball(Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Vector2(1000, 0), Color(150, 255, 255))
+    Ball(Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Vector2(600, 0), Color(150, 255, 255))
 ]
+
+score_p1: int = 0
+score_p2: int = 0
 
 # main loop
 running = True
@@ -164,15 +238,22 @@ while running:
     # process:
     for obj in gameobjects:
         obj.update(delta)
+    s1.score = score_p1
+    s2.score = score_p2
     #p2.pos = Vector2(p2.pos.x, pygame.mouse.get_pos()[1])
 
     # draw:
     screen.fill(bgcolor)
     for obj in gameobjects:
-        obj.draw()
-    #text = game_font.render("07", True, Color(255, 255, 255))
+        obj.draw(delta)
+    #text = game_font.render(str(1 / delta), True, Color(255, 255, 255))
     #screen.blit(text, (300, 100))
 
     pygame.display.flip()
+
+    if max(score_p1, score_p2) >= MAX_POINTS:
+        break
+
+
 
 pygame.quit()
