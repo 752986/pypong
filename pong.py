@@ -3,6 +3,7 @@ from pygame.rect import Rect
 from pygame.math import Vector2
 from pygame.color import Color
 from pygame import font
+import math
 import random
 
 pygame.init()
@@ -38,6 +39,7 @@ class Ball(GameObject):
     bounds: Rect
 
     _can_bounce = True
+    _paddle_bounce = True
     _hue: float
 
     def __init__(self, pos: Vector2, vel: Vector2 = Vector2(0, 0), color: Color = Color(255, 255, 255), size: float = 15):
@@ -58,12 +60,12 @@ class Ball(GameObject):
 
         # bounce off of paddles:
         for o in gameobjects:
-            if isinstance(o, Paddle):
-                if self._can_bounce: # only bounce once, otherwise it could get stuck in the paddle
-                    if self.bounds.colliderect(o.bounds):
-                        self.vel.x *= -1
-                        self.vel.y += o.dy * 0.5
-                        self._can_bounce = False
+            if self._paddle_bounce and isinstance(o, Paddle) and self.bounds.colliderect(o.bounds): # only bounce once, otherwise it could get stuck in the paddle
+                self.vel.x *= -1
+                self.vel.y += o.dy * 0.5
+                self._paddle_bounce = False
+            else:
+                self._paddle_bounce = True
 
         # update position
         self.pos += self.vel * delta
@@ -79,39 +81,52 @@ class Ball(GameObject):
 
 
 class Paddle(GameObject):
+    LEFT = False
+    RIGHT = True
+
     bounds: Rect
-    base_color: Color
-    player_color: Color
+    facing: bool
     dy: float = 0.0
 
     _py: float
 
-    def __init__(self, pos: Vector2, color: Color = Color(255, 255, 255), color2: Color = Color(255, 255, 255), size: float = 150):
+    def __init__(self, pos: Vector2, color: Color = Color(255, 255, 255), size: float = 150):
         super().__init__(pos, color)
         self.base_color = color
-        self.player_color = color2
+        self.facing = Paddle.RIGHT if pos.x < SCREEN_WIDTH / 2 else Paddle.LEFT
         self.bounds = Rect(pos, (6, size))
-        self.py = pos.y
+        self._py = pos.y
+
+    def move(self, amnt: float, delta: float = 1):
+        self.pos.y += amnt * delta
 
     def update(self, delta: float):
+        self.pos.y = max(min(self.pos.y, SCREEN_HEIGHT), 0)
         # position is updated from input handling
-        self.bounds.topleft = (int(self.pos.x), int(self.pos.y))
+        self.bounds.center = (int(self.pos.x), int(self.pos.y))
 
         # calculate vertical velocity (dy)
-        self.dy = lerp((self.pos.y - self.py) / delta, self.dy, 0.9)
-        self.py = self.pos.y
+        self.dy = lerp((self.pos.y - self._py) / delta, self.dy, 0.9)
+        self._py = self.pos.y
 
     def draw(self):
-        pygame.draw.line(screen, self.color, (self.bounds.centerx, self.bounds.top), (self.bounds.centerx, self.bounds.bottom), 6)
+        offset = round(self.dy * 0.005, 1) * (1 if self.facing == Paddle.LEFT else -1)
+        pygame.draw.line(screen, self.color, (self.bounds.centerx - offset, self.bounds.top), (self.bounds.centerx + offset, self.bounds.bottom), 6)
         
 
 # initialize game:
-game_font = font.Font("C:\\Users\\cheet\\AppData\\Local\\Microsoft\\Windows\\Fonts\\RobotoMono-Light.ttf", 64)
+PLAYER_SPEED = 1200.0
+
+game_font = font.SysFont(["consolas", ""], 48)
+
+bgcolor = Color(10, 15, 20)
 
 pygame.mouse.set_visible(False)
 
-p2 = Paddle(Vector2(SCREEN_WIDTH - 50, 200), Color(255, 58, 100), Color(255, 58, 100))# Color(255, 100, 200))
+p1 = Paddle(Vector2(50, SCREEN_HEIGHT / 2), Color(176, 255, 54))
+p2 = Paddle(Vector2(SCREEN_WIDTH - 50, SCREEN_HEIGHT / 2), Color(255, 58, 100))
 gameobjects: list[GameObject] = [
+    p1,
     p2,
     Ball(Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Vector2(1000, 0), Color(150, 255, 255))
 ]
@@ -131,21 +146,32 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         if event.type == pygame.JOYAXISMOTION:
-            print("aaa")
             if event.axis == pygame.CONTROLLER_AXIS_LEFTY:
                 print(event.value)
+    
+    keys = pygame.key.get_pressed()
+    # player 1 movement
+    if keys[pygame.K_w]:
+        p1.move(-PLAYER_SPEED, delta)
+    if keys[pygame.K_s]:
+        p1.move(PLAYER_SPEED, delta)
+    # player 2 movement
+    if keys[pygame.K_UP]:
+        p2.move(-PLAYER_SPEED, delta)
+    if keys[pygame.K_DOWN]:
+        p2.move(PLAYER_SPEED, delta)
     
     # process:
     for obj in gameobjects:
         obj.update(delta)
-    p2.pos = Vector2(p2.pos.x, pygame.mouse.get_pos()[1])
+    #p2.pos = Vector2(p2.pos.x, pygame.mouse.get_pos()[1])
 
     # draw:
-    screen.fill((10, 15, 20))
+    screen.fill(bgcolor)
     for obj in gameobjects:
         obj.draw()
-    text = game_font.render("07", True, Color(255, 255, 255))
-    screen.blit(text, (300, 100))
+    #text = game_font.render("07", True, Color(255, 255, 255))
+    #screen.blit(text, (300, 100))
 
     pygame.display.flip()
 
