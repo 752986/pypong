@@ -12,7 +12,7 @@ pygame.init()
 FPS = 240
 SCREEN_WIDTH = 1440
 SCREEN_HEIGHT = 960
-MAX_POINTS = 1
+MAX_POINTS = 15
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Pong!")
 
@@ -205,10 +205,13 @@ class Victory(GameObject):
 def score(player: int):
     global score_p1
     global score_p2
+    global PLAYER_SPEED
     if player == 1:
         score_p1 += 1
     if player == 2:
         score_p2 += 1
+
+    PLAYER_SPEED *= 1.05
 
 
 # initialize game:
