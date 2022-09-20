@@ -1,3 +1,4 @@
+from ctypes import RTLD_GLOBAL
 import pygame
 from pygame.rect import Rect
 from pygame.math import Vector2
@@ -11,7 +12,7 @@ pygame.init()
 FPS = 240
 SCREEN_WIDTH = 1440
 SCREEN_HEIGHT = 960
-MAX_POINTS = 11
+MAX_POINTS = 1
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Pong!")
 
@@ -49,6 +50,7 @@ class Ball(GameObject):
         self._hue = color.hsla[0]
         self.vel = vel
         self.bounds = Rect(pos, (size, size))
+        self._reset(random.choice([Paddle.LEFT, Paddle.RIGHT]))
 
     def _reset(self, dir: int):
         self.pos = Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
@@ -99,7 +101,7 @@ class Ball(GameObject):
     def draw(self, delta: float):
         if self._sleep > 0.0:
             normvel = self.vel.normalize()
-            pygame.draw.line(screen, self.color, Vector2(self.bounds.center) + (normvel * 10), Vector2(self.bounds.center) + (normvel * 20), 3)
+            pygame.draw.line(screen, self.color, Vector2(self.bounds.center) + (normvel * 15), Vector2(self.bounds.center) + (normvel * 20), 3)
 
         self._hue = (self._hue + 0.1) % 360
         self.color.hsla = (self._hue, self.color.hsla[1], self.color.hsla[2], self.color.hsla[3])
@@ -168,7 +170,35 @@ class Score(GameObject):
             angle = (i / self.score) * math.tau + self._time
             p1 = Vector2(math.cos(angle) * d1, math.sin(angle) * d1)
             p2 = Vector2(math.cos(angle) * d2, math.sin(angle) * d2)
-            pygame.draw.line(screen, self.color, p1 + self.pos, p2 + self.pos, 2)
+            pygame.draw.line(screen, self.color, p1 + self.pos, p2 + self.pos, 3)
+
+
+class Victory(GameObject):
+    color1: Color
+    color2: Color
+    text: str
+    _hue: float = 0
+
+    def __init__(self, text: str, pos: Vector2, color: Color, color1: Color = Color(100, 210, 240), color2: Color = Color(10, 15, 20)):
+        super().__init__(pos, color)
+        self.color1 = color1
+        self.color2 = color2
+        self.text = text
+
+    def update(self, delta):
+        pass
+
+    def draw(self, delta: float):
+        self._hue = (self._hue + 0.5) % 360
+        #c = Color(0, 0, 0)
+        #c.hsva = (self._hue, 40, 40, 100)
+        c = self.color1.lerp(self.color2, ((math.sin(math.radians(self._hue)) + 1) * 0.5) ** 0.5)
+        r = Rect(0, 0, game_font.size(self.text)[0] + 50, game_font.size(self.text)[1] + 50)
+        r.center = (int(self.pos.x), int(self.pos.y))
+        pygame.draw.rect(screen, self.color, r)
+        text = game_font.render(self.text, True, c)
+        screen.blit(text, (r.topleft[0] + 25, r.topleft[1] + 25))
+
 
 
 
@@ -188,8 +218,6 @@ game_font = font.SysFont(["consolas", ""], 48)
 
 bgcolor = Color(10, 15, 20)
 
-pygame.mouse.set_visible(False)
-
 p1 = Paddle(Vector2(50, SCREEN_HEIGHT / 2), Color(176, 255, 54))
 p2 = Paddle(Vector2(SCREEN_WIDTH - 50, SCREEN_HEIGHT / 2), Color(255, 58, 100))
 s1 = Score(Vector2(400, 100), Color(176, 255, 54))
@@ -206,6 +234,7 @@ score_p1: int = 0
 score_p2: int = 0
 
 # main loop
+finished = False
 running = True
 prevtime = 0
 while running:
@@ -251,9 +280,9 @@ while running:
 
     pygame.display.flip()
 
-    if max(score_p1, score_p2) >= MAX_POINTS:
-        break
-
-
-
+    if max(score_p1, score_p2) >= MAX_POINTS and not finished:
+        finished = True
+        victory = Victory("Player 1 wins!" if score_p1 > score_p2 else "Player 2 wins!", Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Color(176, 255, 54) if score_p1 > score_p2 else Color(255, 58, 100))
+        gameobjects = [victory]
+    
 pygame.quit()
