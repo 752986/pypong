@@ -1,4 +1,3 @@
-from ctypes import RTLD_GLOBAL
 import pygame
 from pygame.rect import Rect
 from pygame.math import Vector2
