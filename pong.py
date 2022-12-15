@@ -1,3 +1,4 @@
+from re import sub
 import pygame
 from pygame.rect import Rect
 from pygame.math import Vector2
@@ -8,13 +9,13 @@ import random
 
 pygame.init()
 
-FPS = 240
+FPS = 60
 SCREEN_WIDTH = 1440
-SCREEN_HEIGHT = 960
-MAX_POINTS = 15
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+SCREEN_HEIGHT = 900
+MAX_POINTS = 2
+PLAYER_START_SPEED = 800.0
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
 pygame.display.set_caption("Pong!")
-
 
 def lerp(a: float, b: float, t: float):
     return (1 - t) * a + t * b
@@ -63,7 +64,7 @@ class Ball(GameObject):
     def update(self, delta: float):
         if self._sleep > 0.0:
             self._sleep -= delta
-            pygame.draw.line(screen, self.color, self.pos, self.pos + (self.vel))
+            # pygame.draw.line(screen, self.color, self.pos, self.pos + (self.vel))
             return
 
         # bounce off of wall:
@@ -96,6 +97,9 @@ class Ball(GameObject):
 
         if screen.get_clip().contains(self.bounds):
             self._can_bounce = True
+        else:
+            if self.pos.length_squared() > Vector2(SCREEN_WIDTH, SCREEN_HEIGHT).length_squared() * 1.2:
+                self._reset(random.choice([Paddle.LEFT, Paddle.RIGHT]))
 
     def draw(self, delta: float):
         if self._sleep > 0.0:
@@ -124,7 +128,7 @@ class Paddle(GameObject):
         self.bounds = Rect(pos, (16, size))
         self._py = pos.y
 
-    def move(self, amnt: float, delta):
+    def move(self, amnt: float, delta: float):
         self.pos.y += amnt * delta
 
     def update(self, delta: float):
@@ -160,7 +164,7 @@ class Score(GameObject):
             string = "0" + string
 
         text = game_font.render(string, True, Color(255, 255, 255))
-        screen.blit(text, self.pos + Vector2(-26, -22))
+        screen.blit(text, self.pos + Vector2(-28, -34))
 
         d1 = 40
         d2 = d1 + 10
@@ -176,7 +180,7 @@ class Victory(GameObject):
     color1: Color
     color2: Color
     text: str
-    _hue: float = 0
+    _hue: float = 200
 
     def __init__(self, text: str, pos: Vector2, color: Color, color1: Color = Color(100, 210, 240), color2: Color = Color(10, 15, 20)):
         super().__init__(pos, color)
@@ -188,103 +192,111 @@ class Victory(GameObject):
         pass
 
     def draw(self, delta: float):
-        self._hue = (self._hue + 0.5) % 360
-        #c = Color(0, 0, 0)
-        #c.hsva = (self._hue, 40, 40, 100)
-        c = self.color1.lerp(self.color2, ((math.sin(math.radians(self._hue)) + 1) * 0.5) ** 0.5)
+        self._hue = (self._hue + (12 * delta)) % 360
+        # c = Color(0, 0, 0)
+        self.color1.hsva = (self._hue, 65, 80, 100)
+        c = self.color1.lerp(self.color2, ((math.sin(math.radians(self._hue * 5.5)) + 1) * 0.5) ** 0.5)
         r = Rect(0, 0, game_font.size(self.text)[0] + 50, game_font.size(self.text)[1] + 50)
         r.center = (int(self.pos.x), int(self.pos.y))
         pygame.draw.rect(screen, self.color, r)
         text = game_font.render(self.text, True, c)
         screen.blit(text, (r.topleft[0] + 25, r.topleft[1] + 25))
 
-
-
-
 def score(player: int):
     global score_p1
     global score_p2
-    global PLAYER_SPEED
+    global player_speed
     if player == 1:
         score_p1 += 1
     if player == 2:
         score_p2 += 1
 
-    PLAYER_SPEED *= 1.05
+    player_speed *= 1.05
 
+end = False
+while not end:
+    # started = False
+    # if not started:
+    #     for event in pygame.event.get():
+    #         if event.type == pygame.QUIT:
+    #             end = True
+    #         if event.type == pygame.KEYDOWN:
+    #             started = True
 
-# initialize game:
-PLAYER_SPEED = 1200.0
+    # initialize game:
+    player_speed = PLAYER_START_SPEED
 
-game_font = font.SysFont(["consolas", ""], 48)
+    # game_font = font.SysFont(["consolas", "menlo"], 48)
+    game_font = font.Font(font.match_font("Roboto Mono"), 48)
 
-bgcolor = Color(10, 15, 20)
+    bgcolor = Color(10, 15, 20)
 
-p1 = Paddle(Vector2(50, SCREEN_HEIGHT / 2), Color(176, 255, 54))
-p2 = Paddle(Vector2(SCREEN_WIDTH - 50, SCREEN_HEIGHT / 2), Color(255, 58, 100))
-s1 = Score(Vector2(400, 100), Color(176, 255, 54))
-s2 = Score(Vector2(SCREEN_WIDTH - 400, 100), Color(255, 58, 100))
-gameobjects: list[GameObject] = [
-    s1,
-    s2,
-    p1,
-    p2,
-    Ball(Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Vector2(600, 0), Color(150, 255, 255))
-]
+    p1 = Paddle(Vector2(50, SCREEN_HEIGHT / 2), Color(176, 255, 54))
+    p2 = Paddle(Vector2(SCREEN_WIDTH - 50, SCREEN_HEIGHT / 2), Color(255, 58, 100))
+    s1 = Score(Vector2(400, 100), Color(176, 255, 54))
+    s2 = Score(Vector2(SCREEN_WIDTH - 400, 100), Color(255, 58, 100))
+    gameobjects: list[GameObject] = [
+        s1,
+        s2,
+        p1,
+        p2,
+        Ball(Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Vector2(600, 0), Color(150, 255, 255))
+    ]
 
-score_p1: int = 0
-score_p2: int = 0
+    score_p1: int = 0
+    score_p2: int = 0
 
-# main loop
-finished = False
-running = True
-prevtime = 0
-while running:
-    # find time in seconds since last frame
-    delta = (pygame.time.get_ticks() - prevtime) / 1000
-    prevtime = pygame.time.get_ticks()
+    # main loop
+    finished = False
+    running = True
+    prevtime = 0
+    clock = pygame.time.Clock()
+    while running:
+        # find time in seconds since last frame
+        delta = clock.tick(FPS) / 1000
 
-    pygame.time.delay(int(1000 / FPS ))
-
-    # input:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+        # input:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                end = True
+            # if event.type == pygame.JOYAXISMOTION:
+            #     if event.axis == pygame.CONTROLLER_AXIS_LEFTY:
+            #         print(event.value)
+        
+        keys = pygame.key.get_pressed()
+        # player 1 movement
+        if keys[pygame.K_w]:
+            p1.move(-player_speed, delta)
+        if keys[pygame.K_s]:
+            p1.move(player_speed, delta)
+        # player 2 movement
+        if keys[pygame.K_UP]:
+            p2.move(-player_speed, delta)
+        if keys[pygame.K_DOWN]:
+            p2.move(player_speed, delta)
+        if keys[pygame.K_ESCAPE]:
             running = False
-        if event.type == pygame.JOYAXISMOTION:
-            if event.axis == pygame.CONTROLLER_AXIS_LEFTY:
-                print(event.value)
-    
-    keys = pygame.key.get_pressed()
-    # player 1 movement
-    if keys[pygame.K_w]:
-        p1.move(-PLAYER_SPEED, delta)
-    if keys[pygame.K_s]:
-        p1.move(PLAYER_SPEED, delta)
-    # player 2 movement
-    if keys[pygame.K_UP]:
-        p2.move(-PLAYER_SPEED, delta)
-    if keys[pygame.K_DOWN]:
-        p2.move(PLAYER_SPEED, delta)
-    
-    # process:
-    for obj in gameobjects:
-        obj.update(delta)
-    s1.score = score_p1
-    s2.score = score_p2
-    #p2.pos = Vector2(p2.pos.x, pygame.mouse.get_pos()[1])
 
-    # draw:
-    screen.fill(bgcolor)
-    for obj in gameobjects:
-        obj.draw(delta)
-    #text = game_font.render(str(1 / delta), True, Color(255, 255, 255))
-    #screen.blit(text, (300, 100))
+        # process:
+        for obj in gameobjects:
+            obj.update(delta)
+        s1.score = score_p1
+        s2.score = score_p2
+        #p2.pos = Vector2(p2.pos.x, pygame.mouse.get_pos()[1])
 
-    pygame.display.flip()
+        # draw:
+        screen.fill(bgcolor)
+        for obj in gameobjects:
+            obj.draw(delta)
+        #text = game_font.render(str(1 / delta), True, Color(255, 255, 255))
+        #screen.blit(text, (300, 100))
 
-    if max(score_p1, score_p2) >= MAX_POINTS and not finished:
-        finished = True
-        victory = Victory("Player 1 wins!" if score_p1 > score_p2 else "Player 2 wins!", Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Color(176, 255, 54) if score_p1 > score_p2 else Color(255, 58, 100))
-        gameobjects = [victory]
+        pygame.display.flip()
+
+        if max(score_p1, score_p2) >= MAX_POINTS and not finished:
+            finished = True
+            victory = Victory("Player 1 wins!" if score_p1 > score_p2 else "Player 2 wins!", Vector2(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), Color(176, 255, 54) if score_p1 > score_p2 else Color(255, 58, 100))
+            gameobjects = [victory]
     
 pygame.quit()
